@@ -1,0 +1,33 @@
+stages: [build, test, deploy]
+
+build:
+  stage: build
+  image: docker:24
+  services: [docker:24-dind]
+  script:
+    - docker build -t app:ci -f docker/app.Dockerfile .
+
+test:
+  stage: test
+  image: python:3.12
+  script:
+    - pip install -r python/requirements.txt
+    - pytest -q python/tests
+  artifacts:
+    when: always
+    reports:
+      junit: python-junit.xml
+
+deploy:
+  stage: deploy
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache openssh-client
+  script:
+    - |
+      ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "
+        cd ~/voice-assistant && docker compose pull || true
+        docker compose up -d
+      "
+  only:
+    - main
